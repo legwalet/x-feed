@@ -71,9 +71,12 @@ async function fetchTwitterData(endpoint, params = {}) {
       throw new Error('Twitter Bearer Token not configured');
     }
     
+    // Decode URL-encoded Bearer Token if needed
+    const token = decodeURIComponent(BEARER_TOKEN);
+    
     const response = await axios.get(`${TWITTER_API_BASE}${endpoint}`, {
       headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       params: {
@@ -86,6 +89,8 @@ async function fetchTwitterData(endpoint, params = {}) {
     return response.data;
   } catch (error) {
     console.error('Twitter API Error:', error.response?.data || error.message);
+    console.error('Endpoint:', endpoint);
+    console.error('Status:', error.response?.status);
     throw error;
   }
 }
@@ -361,9 +366,11 @@ app.get('/api/feeds/user/:username', async (req, res) => {
     // First, get user ID from username
     let userResponse;
     try {
+      // Decode URL-encoded Bearer Token if needed
+      const token = decodeURIComponent(BEARER_TOKEN);
       userResponse = await axios.get(`${TWITTER_API_BASE}/users/by/username/${username}`, {
         headers: {
-          'Authorization': `Bearer ${BEARER_TOKEN}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
