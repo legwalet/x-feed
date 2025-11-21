@@ -321,7 +321,7 @@ async function fetchTimeline() {
     errorMessage.classList.add('hidden');
     
     try {
-        const response = await fetch('/api/user?username=Quanty007&maxResults=20', {
+        const response = await fetch('/api/feeds/user/Quanty007?maxResults=20', {
             credentials: 'include'
         });
         
@@ -354,7 +354,7 @@ async function searchTweets() {
     errorMessage.classList.add('hidden');
     
     try {
-        const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&maxResults=20`, {
+        const response = await fetch(`/api/feeds/search?query=${encodeURIComponent(query)}&maxResults=20`, {
             credentials: 'include'
         });
         
@@ -386,7 +386,7 @@ async function fetchFeeds() {
     errorMessage.classList.add('hidden');
     
     try {
-        const response = await fetch('/api/interests', {
+        const response = await fetch('/api/feeds/interests', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

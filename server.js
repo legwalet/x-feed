@@ -359,27 +359,49 @@ app.get('/api/feeds/user/:username', async (req, res) => {
     }
 
     // First, get user ID from username
-    const userResponse = await axios.get(`${TWITTER_API_BASE}/users/by/username/${username}`, {
-      headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    let userResponse;
+    try {
+      userResponse = await axios.get(`${TWITTER_API_BASE}/users/by/username/${username}`, {
+        headers: {
+          'Authorization': `Bearer ${BEARER_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching user:', error.response?.data || error.message);
+      return res.status(error.response?.status || 500).json({ 
+        error: 'Failed to fetch user',
+        message: error.response?.data?.detail || error.message 
+      });
+    }
+
+    if (!userResponse.data?.data?.id) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     const userId = userResponse.data.data.id;
 
-    // Get user's tweets (use OAuth if available)
+    // Get user's tweets (use OAuth if available, otherwise Bearer Token)
     let data;
-    if (req.session.twitterAccessToken && req.session.twitterAccessTokenSecret) {
-      data = await fetchTwitterDataWithOAuth(
-        `/users/${userId}/tweets`,
-        { max_results: Math.min(parseInt(maxResults), 100) },
-        req.session.twitterAccessToken,
-        req.session.twitterAccessTokenSecret
-      );
-    } else {
-      data = await fetchTwitterData(`/users/${userId}/tweets`, {
-        max_results: Math.min(parseInt(maxResults), 100)
+    try {
+      if (req.session.twitterAccessToken && req.session.twitterAccessTokenSecret) {
+        data = await fetchTwitterDataWithOAuth(
+          `/users/${userId}/tweets`,
+          { max_results: Math.min(parseInt(maxResults), 100) },
+          req.session.twitterAccessToken,
+          req.session.twitterAccessTokenSecret
+        );
+      } else {
+        // Use Bearer Token for public tweets
+        data = await fetchTwitterData(`/users/${userId}/tweets`, {
+          max_results: Math.min(parseInt(maxResults), 100)
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching tweets:', error.response?.data || error.message);
+      return res.status(error.response?.status || 500).json({ 
+        error: 'Failed to fetch user tweets',
+        message: error.response?.data?.detail || error.message 
       });
     }
 
