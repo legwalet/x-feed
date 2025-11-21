@@ -18,17 +18,17 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Extract username from path: /api/user/Quanty007 or from query
-    let username = event.path.split('/').pop();
-    // Check if we got the function name instead of username
-    if (!username || username === 'user' || username.includes('.')) {
-      // Try to get from the full path
-      const pathParts = event.path.split('/').filter(p => p && p !== 'user' && !p.includes('.'));
-      username = pathParts[pathParts.length - 1] || event.queryStringParameters?.username;
+    // Get username from query parameters (preferred) or path
+    const { username, maxResults = 10 } = event.queryStringParameters || {};
+    
+    // If not in query, try to extract from path
+    let finalUsername = username;
+    if (!finalUsername) {
+      const pathParts = event.path.split('/').filter(p => p && p !== 'user' && !p.includes('.') && !p.includes('?'));
+      finalUsername = pathParts[pathParts.length - 1];
     }
-    const { maxResults = 10 } = event.queryStringParameters || {};
 
-    if (!username) {
+    if (!finalUsername) {
       return {
         statusCode: 400,
         headers,
@@ -45,7 +45,7 @@ exports.handler = async (event, context) => {
     }
 
     // Get user ID from username
-    const userResponse = await axios.get(`${TWITTER_API_BASE}/users/by/username/${username}`, {
+    const userResponse = await axios.get(`${TWITTER_API_BASE}/users/by/username/${finalUsername}`, {
       headers: {
         'Authorization': `Bearer ${BEARER_TOKEN}`,
         'Content-Type': 'application/json'
@@ -61,7 +61,7 @@ exports.handler = async (event, context) => {
         'Content-Type': 'application/json'
       },
       params: {
-        max_results: Math.min(parseInt(maxResults), 100),
+        max_results: Math.min(parseInt(maxResults || 10), 100),
         'tweet.fields': 'created_at,author_id,public_metrics,text,entities',
         'user.fields': 'name,username,profile_image_url',
         'expansions': 'author_id'

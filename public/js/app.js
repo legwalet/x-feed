@@ -348,7 +348,7 @@ async function fetchTimeline() {
     errorMessage.classList.add('hidden');
     
     try {
-        const response = await fetch('/api/user/Quanty007?maxResults=20', {
+        const response = await fetch('/api/user?username=Quanty007&maxResults=20', {
             credentials: 'include'
         });
         
