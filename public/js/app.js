@@ -349,7 +349,6 @@ async function fetchTimeline() {
     
     try {
         const response = await fetch('/api/user/Quanty007?maxResults=20', {
-            method: 'GET',
             credentials: 'include'
         });
         

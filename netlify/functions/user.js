@@ -18,11 +18,13 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Extract username from path: /api/user/Quanty007
+    // Extract username from path: /api/user/Quanty007 or from query
     let username = event.path.split('/').pop();
-    // If path ends with function name, get from query params
-    if (!username || username === 'user') {
-      username = event.queryStringParameters?.username;
+    // Check if we got the function name instead of username
+    if (!username || username === 'user' || username.includes('.')) {
+      // Try to get from the full path
+      const pathParts = event.path.split('/').filter(p => p && p !== 'user' && !p.includes('.'));
+      username = pathParts[pathParts.length - 1] || event.queryStringParameters?.username;
     }
     const { maxResults = 10 } = event.queryStringParameters || {};
 
