@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const crypto = require('crypto');
-const { OAuth2Client } = require('google-auth-library');
+const OAuth = require('oauth-1.0a');
 require('dotenv').config();
 
 const app = express();
@@ -30,7 +30,6 @@ const allowedOrigins = [
 ];
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://xfeed')) {
       callback(null, true);
@@ -43,24 +42,27 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
-// Google OAuth configuration
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || `http://localhost:${PORT}/auth/google/callback`;
+// Twitter OAuth 1.0a configuration
+const TWITTER_API_KEY = process.env.TWITTER_API_KEY;
+const TWITTER_API_KEY_SECRET = process.env.TWITTER_API_KEY_SECRET;
+const TWITTER_ACCESS_TOKEN = process.env.TWITTER_ACCESS_TOKEN;
+const TWITTER_ACCESS_TOKEN_SECRET = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+const TWITTER_CALLBACK_URL = process.env.TWITTER_CALLBACK_URL || `http://localhost:${PORT}/auth/twitter/callback`;
 
-// Twitter/X API configuration (using Bearer Token for public feeds)
+// Twitter/X API configuration
 const TWITTER_API_BASE = 'https://api.twitter.com/2';
+const TWITTER_OAUTH_BASE = 'https://api.twitter.com/oauth';
 const BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN;
 
-// Initialize Google OAuth client
-let oauth2Client = null;
-if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-  oauth2Client = new OAuth2Client(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI
-  );
-}
+// Initialize OAuth 1.0a
+const oauth = OAuth({
+  consumer: {
+    key: TWITTER_API_KEY,
+    secret: TWITTER_API_KEY_SECRET
+  },
+  signature_method: 'HMAC-SHA1',
+  hash_function: (baseString, key) => crypto.createHmac('sha1', key).update(baseString).digest('base64')
+});
 
 // Helper function to make Twitter API requests with Bearer token
 async function fetchTwitterData(endpoint, params = {}) {
@@ -88,85 +90,170 @@ async function fetchTwitterData(endpoint, params = {}) {
   }
 }
 
+// Helper function to make authenticated Twitter API requests with OAuth 1.0a
+async function fetchTwitterDataWithOAuth(endpoint, params = {}, accessToken, accessTokenSecret) {
+  try {
+    const requestData = {
+      url: `${TWITTER_API_BASE}${endpoint}`,
+      method: 'GET'
+    };
+
+    const token = {
+      key: accessToken,
+      secret: accessTokenSecret
+    };
+
+    const authHeader = oauth.toHeader(oauth.authorize(requestData, token));
+
+    const response = await axios.get(requestData.url, {
+      headers: {
+        ...authHeader,
+        'Content-Type': 'application/json'
+      },
+      params: {
+        ...params,
+        'tweet.fields': 'created_at,author_id,public_metrics,text,entities',
+        'user.fields': 'name,username,profile_image_url',
+        'expansions': 'author_id'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Twitter OAuth API Error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
 // Check authentication status
 app.get('/api/auth/status', (req, res) => {
   res.json({ 
-    authenticated: !!req.session.googleUser,
-    user: req.session.googleUser || null
+    authenticated: !!(req.session.twitterAccessToken && req.session.twitterAccessTokenSecret),
+    user: req.session.twitterUser || null
   });
 });
 
-// Initiate Google OAuth login
-app.get('/auth/google', (req, res) => {
-  if (!oauth2Client) {
-    return res.status(500).json({ error: 'Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env' });
-  }
-
-  // Generate state for CSRF protection
-  const state = crypto.randomBytes(32).toString('hex');
-  req.session.oauthState = state;
-
-  // Generate authorization URL
-  const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: [
-      'https://www.googleapis.com/auth/userinfo.email',
-      'https://www.googleapis.com/auth/userinfo.profile'
-    ],
-    state: state,
-    prompt: 'consent'
-  });
-
-  res.redirect(authUrl);
-});
-
-// Google OAuth callback
-app.get('/auth/google/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-
-  if (error) {
-    return res.redirect(`/?error=${encodeURIComponent(error)}`);
-  }
-
-  // Verify state
-  if (!state || state !== req.session.oauthState) {
-    return res.redirect('/?error=invalid_state');
-  }
-
-  if (!code) {
-    return res.redirect('/?error=no_code');
+// Initiate Twitter OAuth 1.0a login
+app.get('/auth/twitter', async (req, res) => {
+  if (!TWITTER_API_KEY || !TWITTER_API_KEY_SECRET) {
+    return res.status(500).json({ error: 'Twitter OAuth not configured. Please set TWITTER_API_KEY and TWITTER_API_KEY_SECRET in .env' });
   }
 
   try {
-    // Exchange code for tokens
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
+    // Step 1: Get request token
+    const requestData = {
+      url: `${TWITTER_OAUTH_BASE}/request_token`,
+      method: 'POST'
+    };
 
-    // Get user info
-    const ticket = await oauth2Client.verifyIdToken({
-      idToken: tokens.id_token,
-      audience: GOOGLE_CLIENT_ID
+    const authHeader = oauth.toHeader(oauth.authorize(requestData));
+
+    const response = await axios.post(requestData.url, {}, {
+      headers: {
+        ...authHeader,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
     });
 
-    const payload = ticket.getPayload();
-    
-    // Store user info in session
-    req.session.googleUser = {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-      given_name: payload.given_name,
-      family_name: payload.family_name
-    };
-    req.session.googleTokens = tokens;
+    // Parse the response (format: oauth_token=xxx&oauth_token_secret=xxx&oauth_callback_confirmed=true)
+    const params = new URLSearchParams(response.data);
+    const oauthToken = params.get('oauth_token');
+    const oauthTokenSecret = params.get('oauth_token_secret');
 
-    // Clear OAuth state
-    delete req.session.oauthState;
+    if (!oauthToken || !oauthTokenSecret) {
+      throw new Error('Failed to get request token');
+    }
+
+    // Store in session
+    req.session.oauthToken = oauthToken;
+    req.session.oauthTokenSecret = oauthTokenSecret;
+
+    // Step 2: Redirect to Twitter authorization
+    const authUrl = `${TWITTER_OAUTH_BASE}/authorize?oauth_token=${oauthToken}`;
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('Twitter OAuth error:', error.response?.data || error.message);
+    res.redirect(`/?error=${encodeURIComponent('Failed to initiate Twitter login')}`);
+  }
+});
+
+// Twitter OAuth callback
+app.get('/auth/twitter/callback', async (req, res) => {
+  const { oauth_token, oauth_verifier, denied } = req.query;
+
+  if (denied) {
+    return res.redirect('/?error=twitter_authorization_denied');
+  }
+
+  if (!oauth_token || !oauth_verifier) {
+    return res.redirect('/?error=missing_oauth_parameters');
+  }
+
+  // Verify oauth_token matches session
+  if (oauth_token !== req.session.oauthToken) {
+    return res.redirect('/?error=invalid_oauth_token');
+  }
+
+  try {
+    // Step 3: Exchange request token for access token
+    const requestData = {
+      url: `${TWITTER_OAUTH_BASE}/access_token`,
+      method: 'POST'
+    };
+
+    const token = {
+      key: req.session.oauthToken,
+      secret: req.session.oauthTokenSecret
+    };
+
+    const authHeader = oauth.toHeader(oauth.authorize(requestData, token));
+
+    const response = await axios.post(requestData.url, null, {
+      headers: {
+        ...authHeader,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      params: {
+        oauth_verifier: oauth_verifier
+      }
+    });
+
+    // Parse response
+    const params = new URLSearchParams(response.data);
+    const accessToken = params.get('oauth_token');
+    const accessTokenSecret = params.get('oauth_token_secret');
+    const userId = params.get('user_id');
+    const screenName = params.get('screen_name');
+
+    if (!accessToken || !accessTokenSecret) {
+      throw new Error('Failed to get access token');
+    }
+
+    // Store tokens in session
+    req.session.twitterAccessToken = accessToken;
+    req.session.twitterAccessTokenSecret = accessTokenSecret;
+
+    // Get user info
+    const userData = await fetchTwitterDataWithOAuth(
+      '/users/me',
+      { 'user.fields': 'name,username,profile_image_url' },
+      accessToken,
+      accessTokenSecret
+    );
+
+    req.session.twitterUser = {
+      id: userId || userData.data?.id,
+      username: screenName || userData.data?.username,
+      name: userData.data?.name,
+      profile_image_url: userData.data?.profile_image_url
+    };
+
+    // Clear OAuth tokens from session
+    delete req.session.oauthToken;
+    delete req.session.oauthTokenSecret;
 
     res.redirect('/');
   } catch (error) {
-    console.error('Google OAuth callback error:', error);
+    console.error('Twitter OAuth callback error:', error.response?.data || error.message);
     res.redirect(`/?error=${encodeURIComponent('Authentication failed')}`);
   }
 });
@@ -186,6 +273,20 @@ app.get('/api/feeds/search', async (req, res) => {
       return res.status(400).json({ error: 'Query parameter is required' });
     }
 
+    // Use OAuth if available, otherwise fall back to Bearer Token
+    if (req.session.twitterAccessToken && req.session.twitterAccessTokenSecret) {
+      const data = await fetchTwitterDataWithOAuth(
+        '/tweets/search/recent',
+        {
+          query: query,
+          max_results: Math.min(parseInt(maxResults), 100)
+        },
+        req.session.twitterAccessToken,
+        req.session.twitterAccessTokenSecret
+      );
+      return formatAndSendTweets(res, data);
+    }
+
     if (!BEARER_TOKEN) {
       return res.status(500).json({ error: 'Twitter Bearer Token not configured' });
     }
@@ -195,24 +296,7 @@ app.get('/api/feeds/search', async (req, res) => {
       max_results: Math.min(parseInt(maxResults), 100)
     });
 
-    // Format the response
-    const tweets = data.data || [];
-    const users = data.includes?.users || [];
-    const userMap = {};
-    users.forEach(user => {
-      userMap[user.id] = user;
-    });
-
-    const formattedTweets = tweets.map(tweet => ({
-      id: tweet.id,
-      text: tweet.text,
-      createdAt: tweet.created_at,
-      author: userMap[tweet.author_id] || {},
-      metrics: tweet.public_metrics,
-      entities: tweet.entities
-    }));
-
-    res.json({ tweets: formattedTweets });
+    formatAndSendTweets(res, data);
   } catch (error) {
     res.status(500).json({ 
       error: 'Failed to fetch tweets',
@@ -230,36 +314,32 @@ app.post('/api/feeds/interests', async (req, res) => {
       return res.status(400).json({ error: 'Interests array is required' });
     }
 
+    const query = interests.map(interest => `"${interest}"`).join(' OR ');
+    
+    // Use OAuth if available, otherwise fall back to Bearer Token
+    if (req.session.twitterAccessToken && req.session.twitterAccessTokenSecret) {
+      const data = await fetchTwitterDataWithOAuth(
+        '/tweets/search/recent',
+        {
+          query: query,
+          max_results: Math.min(parseInt(maxResults), 100)
+        },
+        req.session.twitterAccessToken,
+        req.session.twitterAccessTokenSecret
+      );
+      return formatAndSendTweets(res, data);
+    }
+
     if (!BEARER_TOKEN) {
       return res.status(500).json({ error: 'Twitter Bearer Token not configured' });
     }
 
-    // Combine interests into a search query
-    const query = interests.map(interest => `"${interest}"`).join(' OR ');
-    
     const data = await fetchTwitterData('/tweets/search/recent', {
       query: query,
       max_results: Math.min(parseInt(maxResults), 100)
     });
 
-    // Format the response
-    const tweets = data.data || [];
-    const users = data.includes?.users || [];
-    const userMap = {};
-    users.forEach(user => {
-      userMap[user.id] = user;
-    });
-
-    const formattedTweets = tweets.map(tweet => ({
-      id: tweet.id,
-      text: tweet.text,
-      createdAt: tweet.created_at,
-      author: userMap[tweet.author_id] || {},
-      metrics: tweet.public_metrics,
-      entities: tweet.entities
-    }));
-
-    res.json({ tweets: formattedTweets });
+    formatAndSendTweets(res, data);
   } catch (error) {
     res.status(500).json({ 
       error: 'Failed to fetch tweets',
@@ -268,7 +348,7 @@ app.post('/api/feeds/interests', async (req, res) => {
   }
 });
 
-// Get tweets from specific user (e.g., @Quanty007)
+// Get tweets from specific user
 app.get('/api/feeds/user/:username', async (req, res) => {
   try {
     const { username } = req.params;
@@ -288,15 +368,21 @@ app.get('/api/feeds/user/:username', async (req, res) => {
 
     const userId = userResponse.data.data.id;
 
-    // Get user's tweets
-    const data = await fetchTwitterData(`/users/${userId}/tweets`, {
-      max_results: Math.min(parseInt(maxResults), 100),
-      'tweet.fields': 'created_at,author_id,public_metrics,text,entities',
-      'user.fields': 'name,username,profile_image_url',
-      'expansions': 'author_id'
-    });
+    // Get user's tweets (use OAuth if available)
+    let data;
+    if (req.session.twitterAccessToken && req.session.twitterAccessTokenSecret) {
+      data = await fetchTwitterDataWithOAuth(
+        `/users/${userId}/tweets`,
+        { max_results: Math.min(parseInt(maxResults), 100) },
+        req.session.twitterAccessToken,
+        req.session.twitterAccessTokenSecret
+      );
+    } else {
+      data = await fetchTwitterData(`/users/${userId}/tweets`, {
+        max_results: Math.min(parseInt(maxResults), 100)
+      });
+    }
 
-    // Format the response
     const tweets = data.data || [];
     const users = data.includes?.users || [];
     const userMap = {};
@@ -322,6 +408,27 @@ app.get('/api/feeds/user/:username', async (req, res) => {
   }
 });
 
+// Helper function to format and send tweets
+function formatAndSendTweets(res, data) {
+  const tweets = data.data || [];
+  const users = data.includes?.users || [];
+  const userMap = {};
+  users.forEach(user => {
+    userMap[user.id] = user;
+  });
+
+  const formattedTweets = tweets.map(tweet => ({
+    id: tweet.id,
+    text: tweet.text,
+    createdAt: tweet.created_at,
+    author: userMap[tweet.author_id] || {},
+    metrics: tweet.public_metrics,
+    entities: tweet.entities
+  }));
+
+  res.json({ tweets: formattedTweets });
+}
+
 // Serve the main page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -331,8 +438,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on:`);
   console.log(`   http://localhost:${PORT}`);
   console.log(`   http://xfeed:${PORT} (if xfeed is in /etc/hosts)`);
-  if (!GOOGLE_CLIENT_ID) {
-    console.warn('⚠️  Warning: GOOGLE_CLIENT_ID not set. Google OAuth login will not work.');
+  if (!TWITTER_API_KEY) {
+    console.warn('⚠️  Warning: TWITTER_API_KEY not set. Twitter OAuth login will not work.');
   }
   if (!BEARER_TOKEN) {
     console.warn('⚠️  Warning: TWITTER_BEARER_TOKEN not set. Twitter feeds will not work.');

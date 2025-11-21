@@ -34,18 +34,8 @@ const tabTimeline = document.getElementById('tabTimeline');
 const tabInterests = document.getElementById('tabInterests');
 const tabSearch = document.getElementById('tabSearch');
 
-// Check authentication status (only on localhost/staging)
+// Check authentication status
 async function checkAuth() {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === 'xfeed';
-    
-    if (!isLocalhost) {
-        // On production, no auth needed - just show UI
-        isAuthenticated = false;
-        currentUser = null;
-        updateUI();
-        return;
-    }
-
     try {
         const response = await fetch('/api/auth/status', {
             credentials: 'include'
@@ -59,7 +49,8 @@ async function checkAuth() {
             currentUser = null;
         }
     } catch (error) {
-        // Auth endpoint doesn't exist - that's fine
+        // Auth endpoint doesn't exist or failed - show login button
+        console.log('Auth check: endpoint not available');
         isAuthenticated = false;
         currentUser = null;
     } finally {
@@ -69,26 +60,18 @@ async function checkAuth() {
 
 // Update UI based on auth status
 function updateUI() {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === 'xfeed';
-    
     if (isAuthenticated && currentUser) {
         // User is logged in
         loginBtn.classList.add('hidden');
         userInfo.classList.remove('hidden');
-        userAvatar.src = currentUser.picture || 'https://via.placeholder.com/40';
+        userAvatar.src = currentUser.profile_image_url || 'https://via.placeholder.com/40';
         userName.textContent = currentUser.name || 'User';
-        userHandle.textContent = currentUser.email || '';
+        userHandle.textContent = `@${currentUser.username || 'user'}`;
         navTabs.classList.remove('hidden');
         showTab(currentTab);
     } else {
-        // Not logged in
-        if (isLocalhost) {
-            // On staging (localhost), show login button
-            loginBtn.classList.remove('hidden');
-        } else {
-            // On production (Netlify), hide login button (OAuth not fully set up)
-            loginBtn.classList.add('hidden');
-        }
+        // Not logged in - always show login button
+        loginBtn.classList.remove('hidden');
         userInfo.classList.add('hidden');
         
         // Show tabs and features even without login (works with Bearer Token)
@@ -96,9 +79,7 @@ function updateUI() {
         showTab(currentTab);
         
         emptyStateText.textContent = 'Welcome to X Feed';
-        emptyStateSubtext.textContent = isLocalhost 
-            ? 'Login with Google to get started, or add interests to explore feeds'
-            : 'Add interests or search to explore Twitter feeds';
+        emptyStateSubtext.textContent = 'Login with Twitter to personalize your experience, or explore feeds without logging in';
     }
 }
 
@@ -130,16 +111,8 @@ tabSearch.addEventListener('click', () => showTab('search'));
 
 // Login
 loginBtn.addEventListener('click', () => {
-    // Check if we're on localhost (staging) or production
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === 'xfeed';
-    if (isLocalhost) {
-        window.location.href = '/auth/google';
-    } else {
-        // On production, show message or redirect to localhost for OAuth
-        alert('Google OAuth is currently only available on staging (localhost). Please use localhost:3300 for full authentication features.');
-        // Or you could redirect to localhost for OAuth:
-        // window.location.href = 'http://localhost:3300/auth/google';
-    }
+    // Redirect to Twitter OAuth
+    window.location.href = '/auth/twitter';
 });
 
 // Logout
