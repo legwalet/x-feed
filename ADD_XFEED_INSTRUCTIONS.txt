@@ -1,0 +1,22 @@
+QUICK FIX: Add xfeed to /etc/hosts
+
+Run this command in your terminal:
+----------------------------------------
+echo "127.0.0.1 xfeed" | sudo tee -a /etc/hosts
+----------------------------------------
+
+Or run the setup script:
+----------------------------------------
+./setup-xfeed.sh
+----------------------------------------
+
+After adding, verify with:
+----------------------------------------
+ping -c 1 xfeed
+----------------------------------------
+
+Then access your app at:
+- http://xfeed:3300
+- http://localhost:3300 (still works)
+
+If you get "permission denied", make sure you're using sudo.

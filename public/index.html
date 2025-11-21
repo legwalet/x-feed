@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X Feed - Personalized Twitter Feed</title>
+    <link href="/css/output.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center space-x-3">
+                    <i class="fab fa-x-twitter text-4xl text-white"></i>
+                    <h1 class="text-4xl font-bold text-white">X Feed</h1>
+                </div>
+                <div id="authSection" class="flex items-center space-x-4">
+                    <!-- User info will be shown here when logged in -->
+                    <button 
+                        id="loginBtn"
+                        class="hidden px-6 py-2 bg-gradient-to-r from-blue-500 to-red-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-red-600 transition-all duration-200 shadow-lg"
+                    >
+                        <i class="fab fa-google mr-2"></i>Login with Google
+                    </button>
+                    <div id="userInfo" class="hidden flex items-center space-x-3">
+                        <img id="userAvatar" src="" alt="User" class="w-10 h-10 rounded-full border-2 border-white/20">
+                        <div class="text-right">
+                            <div id="userName" class="text-white font-semibold"></div>
+                            <div id="userHandle" class="text-gray-400 text-sm"></div>
+                        </div>
+                        <button 
+                            id="logoutBtn"
+                            class="ml-4 px-4 py-2 bg-red-500/20 border border-red-500/50 text-red-200 rounded-lg hover:bg-red-500/30 transition-all duration-200"
+                        >
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div id="navTabs" class="hidden mb-6 flex space-x-2 bg-white/5 rounded-lg p-1">
+            <button 
+                id="tabTimeline"
+                class="flex-1 px-4 py-2 rounded-lg font-semibold transition-all duration-200 tab-button active"
+                data-tab="timeline"
+            >
+                <i class="fas fa-user mr-2"></i>@Quanty007
+            </button>
+            <button 
+                id="tabInterests"
+                class="flex-1 px-4 py-2 rounded-lg font-semibold transition-all duration-200 tab-button"
+                data-tab="interests"
+            >
+                <i class="fas fa-sliders-h mr-2"></i>Interests
+            </button>
+            <button 
+                id="tabSearch"
+                class="flex-1 px-4 py-2 rounded-lg font-semibold transition-all duration-200 tab-button"
+                data-tab="search"
+            >
+                <i class="fas fa-search mr-2"></i>Search
+            </button>
+        </div>
+
+        <!-- Search Section -->
+        <div id="searchSection" class="hidden bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-6 mb-8 border border-white/20">
+            <h2 class="text-2xl font-semibold text-white mb-4">
+                <i class="fas fa-search mr-2"></i>
+                Search Tweets
+            </h2>
+            <div class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Search for tweets, hashtags, users..."
+                    class="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                <button 
+                    id="searchBtn"
+                    class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                    <i class="fas fa-search mr-2"></i>Search
+                </button>
+            </div>
+        </div>
+
+        <!-- Interest Input Section -->
+        <div id="interestSection" class="hidden bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-6 mb-8 border border-white/20">
+            <h2 class="text-2xl font-semibold text-white mb-4">
+                <i class="fas fa-sliders-h mr-2"></i>
+                Your Interests
+            </h2>
+            <div class="flex flex-wrap gap-2 mb-4" id="interestsContainer">
+                <!-- Interest tags will be added here -->
+            </div>
+            <div class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="interestInput" 
+                    placeholder="Add an interest (e.g., AI, JavaScript, Design...)"
+                    class="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                <button 
+                    id="addInterestBtn"
+                    class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                    <i class="fas fa-plus mr-2"></i>Add
+                </button>
+                <button 
+                    id="fetchFeedsBtn"
+                    class="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                    <i class="fas fa-sync mr-2"></i>Fetch Feeds
+                </button>
+            </div>
+        </div>
+
+        <!-- Timeline Section -->
+        <div id="timelineSection" class="hidden mb-8">
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
+                <h2 class="text-2xl font-semibold text-white mb-4">
+                    <i class="fab fa-x-twitter mr-2"></i>
+                    @Quanty007's Tweets
+                </h2>
+                <button 
+                    id="fetchTimelineBtn"
+                    class="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                    <i class="fas fa-sync mr-2"></i>Load @Quanty007's Feed
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="hidden text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+            <p class="mt-4 text-white">Loading feeds...</p>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-6">
+            <p class="text-red-200" id="errorText"></p>
+        </div>
+
+        <!-- Feeds Container -->
+        <div id="feedsContainer" class="space-y-4">
+            <!-- Feed cards will be added here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-16">
+            <i class="fas fa-feather-alt text-6xl text-white/30 mb-4"></i>
+            <p class="text-xl text-white/60 mb-2" id="emptyStateText">No feeds yet</p>
+            <p class="text-white/40" id="emptyStateSubtext">Login with Google to get started, or add interests to explore feeds</p>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
