@@ -40,18 +40,31 @@ async function checkAuth() {
         const response = await fetch('/api/auth/status', {
             credentials: 'include'
         });
-        const data = await response.json();
-        isAuthenticated = data.authenticated;
-        currentUser = data.user;
-        updateUI();
+        if (response.ok) {
+            const data = await response.json();
+            isAuthenticated = data.authenticated;
+            currentUser = data.user;
+        } else {
+            // Auth endpoint not available (e.g., on Netlify without auth functions)
+            isAuthenticated = false;
+            currentUser = null;
+        }
     } catch (error) {
-        console.error('Auth check error:', error);
+        // Auth endpoint doesn't exist or failed - show login button
+        console.log('Auth check: endpoint not available, showing login button');
+        isAuthenticated = false;
+        currentUser = null;
+    } finally {
+        updateUI();
     }
 }
 
 // Update UI based on auth status
 function updateUI() {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === 'xfeed';
+    
     if (isAuthenticated && currentUser) {
+        // User is logged in
         loginBtn.classList.add('hidden');
         userInfo.classList.remove('hidden');
         userAvatar.src = currentUser.picture || 'https://via.placeholder.com/40';
@@ -60,14 +73,24 @@ function updateUI() {
         navTabs.classList.remove('hidden');
         showTab(currentTab);
     } else {
-        loginBtn.classList.remove('hidden');
+        // Not logged in
+        if (isLocalhost) {
+            // On staging (localhost), show login button
+            loginBtn.classList.remove('hidden');
+        } else {
+            // On production (Netlify), hide login button (OAuth not fully set up)
+            loginBtn.classList.add('hidden');
+        }
         userInfo.classList.add('hidden');
-        navTabs.classList.add('hidden');
-        searchSection.classList.add('hidden');
-        interestSection.classList.add('hidden');
-        timelineSection.classList.add('hidden');
+        
+        // Show tabs and features even without login (works with Bearer Token)
+        navTabs.classList.remove('hidden');
+        showTab(currentTab);
+        
         emptyStateText.textContent = 'Welcome to X Feed';
-        emptyStateSubtext.textContent = 'Login with Google to get started, or add interests to explore feeds';
+        emptyStateSubtext.textContent = isLocalhost 
+            ? 'Login with Google to get started, or add interests to explore feeds'
+            : 'Add interests or search to explore Twitter feeds';
     }
 }
 
@@ -99,7 +122,16 @@ tabSearch.addEventListener('click', () => showTab('search'));
 
 // Login
 loginBtn.addEventListener('click', () => {
-    window.location.href = '/auth/google';
+    // Check if we're on localhost (staging) or production
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === 'xfeed';
+    if (isLocalhost) {
+        window.location.href = '/auth/google';
+    } else {
+        // On production, show message or redirect to localhost for OAuth
+        alert('Google OAuth is currently only available on staging (localhost). Please use localhost:3300 for full authentication features.');
+        // Or you could redirect to localhost for OAuth:
+        // window.location.href = 'http://localhost:3300/auth/google';
+    }
 });
 
 // Logout
