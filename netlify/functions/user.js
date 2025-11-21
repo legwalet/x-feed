@@ -18,7 +18,12 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const username = event.path.split('/').pop() || event.queryStringParameters?.username;
+    // Extract username from path: /api/user/Quanty007
+    let username = event.path.split('/').pop();
+    // If path ends with function name, get from query params
+    if (!username || username === 'user') {
+      username = event.queryStringParameters?.username;
+    }
     const { maxResults = 10 } = event.queryStringParameters || {};
 
     if (!username) {
