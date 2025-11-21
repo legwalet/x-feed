@@ -2,7 +2,17 @@ const axios = require('axios');
 
 // Twitter/X API configuration
 const TWITTER_API_BASE = 'https://api.twitter.com/2';
-const BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN;
+
+// Helper to decode URL-encoded Bearer Token
+function getBearerToken() {
+  const token = process.env.TWITTER_BEARER_TOKEN;
+  if (!token) return null;
+  try {
+    return decodeURIComponent(token);
+  } catch {
+    return token;
+  }
+}
 
 exports.handler = async (event, context) => {
   // Handle CORS
@@ -18,13 +28,14 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Get username from query parameters (preferred) or path
+    // Get username from query parameters
     const { username, maxResults = 10 } = event.queryStringParameters || {};
     
     // If not in query, try to extract from path
     let finalUsername = username;
     if (!finalUsername) {
-      const pathParts = event.path.split('/').filter(p => p && p !== 'user' && !p.includes('.') && !p.includes('?'));
+      // Try to extract from path like /api/feeds/user/Quanty007
+      const pathParts = event.path.split('/').filter(p => p && p !== 'user' && p !== 'feeds' && p !== 'api' && !p.includes('.') && !p.includes('?'));
       finalUsername = pathParts[pathParts.length - 1];
     }
 
@@ -36,6 +47,7 @@ exports.handler = async (event, context) => {
       };
     }
 
+    const BEARER_TOKEN = getBearerToken();
     if (!BEARER_TOKEN) {
       return {
         statusCode: 500,

@@ -2,7 +2,17 @@ const axios = require('axios');
 
 // Twitter/X API configuration
 const TWITTER_API_BASE = 'https://api.twitter.com/2';
-const BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN;
+
+// Helper to decode URL-encoded Bearer Token
+function getBearerToken() {
+  const token = process.env.TWITTER_BEARER_TOKEN;
+  if (!token) return null;
+  try {
+    return decodeURIComponent(token);
+  } catch {
+    return token;
+  }
+}
 
 exports.handler = async (event, context) => {
   // Handle CORS
@@ -28,6 +38,7 @@ exports.handler = async (event, context) => {
       };
     }
 
+    const BEARER_TOKEN = getBearerToken();
     if (!BEARER_TOKEN) {
       return {
         statusCode: 500,

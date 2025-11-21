@@ -7,23 +7,18 @@
   NODE_VERSION = "18"
 
 [[redirects]]
-  from = "/api/search"
+  from = "/api/feeds/search"
   to = "/.netlify/functions/search"
   status = 200
 
 [[redirects]]
-  from = "/api/interests"
+  from = "/api/feeds/interests"
   to = "/.netlify/functions/interests"
   status = 200
 
 [[redirects]]
-  from = "/api/user"
-  to = "/.netlify/functions/user"
-  status = 200
-
-[[redirects]]
-  from = "/api/user/*"
-  to = "/.netlify/functions/user?username=:splat"
+  from = "/api/feeds/user/:username"
+  to = "/.netlify/functions/user?username=:username"
   status = 200
 
 [[redirects]]
