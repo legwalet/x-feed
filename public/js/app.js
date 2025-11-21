@@ -34,8 +34,18 @@ const tabTimeline = document.getElementById('tabTimeline');
 const tabInterests = document.getElementById('tabInterests');
 const tabSearch = document.getElementById('tabSearch');
 
-// Check authentication status
+// Check authentication status (only on localhost/staging)
 async function checkAuth() {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === 'xfeed';
+    
+    if (!isLocalhost) {
+        // On production, no auth needed - just show UI
+        isAuthenticated = false;
+        currentUser = null;
+        updateUI();
+        return;
+    }
+
     try {
         const response = await fetch('/api/auth/status', {
             credentials: 'include'
@@ -45,13 +55,11 @@ async function checkAuth() {
             isAuthenticated = data.authenticated;
             currentUser = data.user;
         } else {
-            // Auth endpoint not available (e.g., on Netlify without auth functions)
             isAuthenticated = false;
             currentUser = null;
         }
     } catch (error) {
-        // Auth endpoint doesn't exist or failed - show login button
-        console.log('Auth check: endpoint not available, showing login button');
+        // Auth endpoint doesn't exist - that's fine
         isAuthenticated = false;
         currentUser = null;
     } finally {
@@ -341,6 +349,7 @@ async function fetchTimeline() {
     
     try {
         const response = await fetch('/api/user/Quanty007?maxResults=20', {
+            method: 'GET',
             credentials: 'include'
         });
         
